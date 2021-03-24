@@ -34,7 +34,7 @@ define FILE_LETTERS = ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h')
 define PROMOTION_RANK_WHITE = 6 # INDEX_MAX - 1
 define PROMOTION_RANK_BLACK = 1 # INDEX_MIN + 1
 
-define COLOR_HOVER = '#90ee90aa' # HTML LightGreen
+define COLOR_HOVER = '#8d52ebaa' # HTML LightGreen
 define COLOR_SELECTED = '#40e0d0aa' # Turquoise
 define COLOR_LEGAL_DST = '#afeeeeaa' # PaleTurquoise
 define COLOR_PREV_MOVE = '#6a5acdaa' # SlateBlue
