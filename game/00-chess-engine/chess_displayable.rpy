@@ -105,7 +105,7 @@ style control_button_text is text:
 
 # BEGIN SCREEN
 
-screen chess(fen, player_color, movetime, depth):
+screen chess(fen, player_color, movetime, depth, game_mode):
     
     modal True
 
@@ -209,20 +209,20 @@ init python:
 
     # stockfish engine is OS-dependent
     if renpy.android:
-        STOCKFISH = 'stockfish-10-armv7' # 32 bit
+        STOCKFISH = 'Stockfish/stockfish-10-armv7' # 32 bit
     elif renpy.ios:
-        STOCKFISH = 'stockfish-11-64' # FIXME: no iOS stockfish available
+        STOCKFISH = 'Stockfish/stockfish-11-64' # FIXME: no iOS stockfish available
     elif renpy.linux:
-        STOCKFISH = 'stockfish_20011801_x64'
+        STOCKFISH = 'Stockfish/stockfish_20011801_x64'
     elif renpy.macintosh:
-        STOCKFISH = 'stockfish-11-64'
+        STOCKFISH = 'Stockfish/stockfish-11-64'
     elif renpy.windows:
-        STOCKFISH = 'stockfish_20011801_x64.exe'
+        STOCKFISH = 'Stockfish/stockfish_20011801_x64.exe'
 
     # mark the Mac and Linux stockfish binaries as executable
     stockfish_dir = os.path.join('game', THIS_PATH, BIN_PATH)
-    build.executable(os.path.join(stockfish_dir, 'stockfish-11-64')) # mac
-    build.executable(os.path.join(stockfish_dir, 'stockfish_20011801_x64')) # linux
+    build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish-11-64')) # mac
+    build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish_20011801_x64')) # linux
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -283,13 +283,17 @@ init python:
 
             self.player_color = player_color
 
-            if self.player_color is None: # player vs player
-                self.bottom_color = WHITE # white on the bottom of screen by default
-                self.uses_stockfish = False # no AI
+            self.game_mode = game_mode
 
-            else: # player vs computer
+            if self.game_mode == "PVP": # player vs player
+                self.bottom_color = WHITE # white on the bottom of screen by default
+                self.uses_stockfish = False
+                self.uses_maiachess = False # no AI
+
+            elif self.game_mode == "Computer": # player vs computer
                 self.bottom_color = self.player_color # player color on the bottom
                 self.uses_stockfish = True
+                self.uses_maiachess = False
 
                 # validate stockfish params movetime and depth
                 movetime = movetime if MIN_MOVETIME <= movetime <= MAX_MOVETIME else MAX_MOVETIME
@@ -299,6 +303,21 @@ init python:
                 stockfish_path = os.path.abspath(os.path.join(renpy.config.gamedir, THIS_PATH, BIN_PATH, STOCKFISH))
                 self.chess_subprocess.stdin.write('#'.join([
                     'stockfish', stockfish_path, str(renpy.windows), str(movetime), str(depth), '\n']))
+                # no return code to parse
+            
+            elif self.game_mode == "Personality" or self.game_mode == "FamousPeople":
+                self.bottom_color = self.player_color # player color on the bottom
+                self.uses_maiachess = True
+                self.uses_stockfish = False
+
+                # validate maichess params movetime and depth
+                movetime = movetime if MIN_MOVETIME <= movetime <= MAX_MOVETIME else MAX_MOVETIME
+
+                MAIACHESS = "Maiachess/" + depth + "/lc0.exe"
+
+                maiachess_path = os.path.abspath(os.path.join(renpy.config.gamedir, THIS_PATH, BIN_PATH, MAIACHESS))
+                self.chess_subprocess.stdin.write('#'.join([
+                    'maiachess', maiachess_path, str(renpy.windows), str(movetime), '1', '\n']))
                 # no return code to parse
                 
             # displayables
@@ -363,6 +382,16 @@ init python:
             # skip GUI interaction for AI's turn in Player vs. AI mode
             if self.uses_stockfish and self.whose_turn != self.player_color:
                 self.chess_subprocess.stdin.write('stockfish_move\n')
+                move = self.chess_subprocess.stdout.readline().strip()
+                time.sleep(2)
+                self.make_move(move)
+                return
+
+            if self.uses_maiachess and self.whose_turn != self.player_color:
+                self.chess_subprocess.stdin.write('maiachess_move\n')
+                move = self.chess_subprocess.stdout.readline().strip()
+                while move != "---***---***---":
+                    move = self.chess_subprocess.stdout.readline().strip()
                 move = self.chess_subprocess.stdout.readline().strip()
                 time.sleep(2)
                 self.make_move(move)
@@ -592,10 +621,10 @@ init python:
             2. communicate the undoing to the subprocess
             3. remove the move from the history      
             """
-            if not self.history or (self.uses_stockfish and len(self.history) < 2):
+            if not self.history or ((self.uses_stockfish or self.uses_maiachess) and len(self.history) < 2):
                 return
             renpy.sound.play(AUDIO_MOVE)
-            if self.uses_stockfish: # PvC, undo two moves
+            if (self.uses_stockfish or self.uses_maiachess): # PvC, undo two moves
                 self.pop_move()
                 self.pop_move()
                 self.history.pop()
@@ -622,6 +651,8 @@ init python:
             """
             self.chess_subprocess.stdin.write('#'.join(['piece_at', str(file_idx), str(rank_idx), '\n']))
             piece = self.chess_subprocess.stdout.readline().strip()
+            while piece not in ['p','r','b','n','k','q','P','R','B','N','K','Q','None']:
+                piece = self.chess_subprocess.stdout.readline().strip()
             return piece if piece != 'None' else None
 
         def get_legal_moves(self):

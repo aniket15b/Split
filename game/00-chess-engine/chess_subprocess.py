@@ -27,9 +27,14 @@ def main():
             chess_engine.init_board(args)
         elif args[0] == 'stockfish':
             chess_engine.init_stockfish(args)
+        elif args[0] == 'maiachess':
+            chess_engine.init_maiachess(args)
 
         elif args[0] == 'stockfish_move':
             chess_engine.get_stockfish_move()
+        elif args[0] == 'maiachess_move':
+            chess_engine.get_maiachess_move()
+        
         elif args[0] == 'game_status':
             chess_engine.get_game_status()
         elif args[0] == 'game_score':
@@ -84,6 +89,21 @@ class ChessEngine():
         self.stockfish = chess.uci.popen_engine(stockfish_path, startupinfo=startupinfo)
         self.stockfish.uci()
         self.stockfish.position(self.board)
+    
+    def init_maiachess(self, args):
+        maiachess_path = args[1]
+        is_os_windows = eval(args[2])
+        self.maiachess_movetime = int(args[3])
+        self.maiachess_depth = int(args[4])
+
+        startupinfo = None
+        if is_os_windows:
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags = subprocess.STARTF_USESHOWWINDOW
+
+        self.maiachess = chess.uci.popen_engine(maiachess_path, startupinfo=startupinfo)
+        self.maiachess.uci()
+        self.maiachess.position(self.board)
 
     def get_piece_at(self, args):
         file_idx, rank_idx = int(args[1]), int(args[2])
@@ -124,6 +144,14 @@ class ChessEngine():
         self.stockfish.position(self.board)
         move = self.stockfish.go(movetime=self.stockfish_movetime, depth=self.stockfish_depth)
         move = move.bestmove
+        print("---***---***---")
+        print(move.uci())
+
+    def get_maiachess_move(self):
+        self.maiachess.position(self.board)
+        move = self.maiachess.go(movetime=self.maiachess_movetime, depth=self.maiachess_depth)
+        move = move.bestmove
+        print("---***---***---")
         print(move.uci())
 
     def get_legal_moves(self):

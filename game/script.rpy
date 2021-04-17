@@ -24,9 +24,11 @@ label start:
             $ player_color = None # None for Player vs. Player
             $ movetime = None
             $ depth = None
+            $ game_mode = "PVP"
 
         "Player vs. Computer":
-            $ movetime = 2000
+            $ movetime = 1000
+            $ game_mode = "Computer"
 
             menu:
                 "Please select a difficulty level"
@@ -49,6 +51,58 @@ label start:
                 "Black":
                     # board view flipped so that the player's color is at the bottom of the screen
                     $ player_color = BLACK
+
+        "Player vs. Personality types":
+            $ movetime = 1000
+            $ game_mode = "Personality"
+
+            menu:
+                "Please select a personality type"
+
+                "Aggressive":
+                    $ depth = "Aggressive"
+
+                "Passive":
+                    $ depth = "Passive"
+
+                "Balanced":
+                    $ depth = "Balanced"
+
+            menu:
+                "Please select Player color"
+
+                "White":
+                    $ player_color = WHITE # this constant is defined in chess_displayable.rpy 
+
+                "Black":
+                    # board view flipped so that the player's color is at the bottom of the screen
+                    $ player_color = BLACK
+
+        "Player vs. Famous People":
+            $ movetime = 1000
+            $ game_mode = "FamousPeople"
+
+            menu:
+                "Please select a famous person"
+
+                "Magnus Carlsen":
+                    $ depth = "MagnusCarlsen"
+
+                "Mikhail Tal":
+                    $ depth = "MikhailTal"
+
+                "Vishwanathan Anand":
+                    $ depth = "VishwanathanAnand"
+
+            menu:
+                "Please select Player color"
+
+                "White":
+                    $ player_color = WHITE # this constant is defined in chess_displayable.rpy 
+
+                "Black":
+                    # board view flipped so that the player's color is at the bottom of the screen
+                    $ player_color = BLACK
         
         "How to Play Chess":
             jump how_to_play
@@ -59,7 +113,7 @@ label start:
     # avoid rolling back and losing chess game state
     $ renpy.block_rollback()
 
-    call screen chess(fen, player_color, movetime, depth)
+    call screen chess(fen, player_color, movetime, depth, game_mode)
 
     # avoid rolling back and entering the chess game again
     $ renpy.block_rollback()
@@ -94,8 +148,8 @@ label how_to_play:
     show pawn attacks as pawn_attacks:
         xalign 0.75
         yalign 0.5
-    pawn "Unlike the other pieces, pawns cannot move backwards. \n\
-        Normally a pawn moves by advancing a single square, but the first time a pawn moves, it has the option of advancing two squares. \n"
+    pawn "Unlike the other pieces, pawns cannot move backwards.\n\
+        Normally a pawn moves by advancing a single square, but the first time a pawn moves, it has the option of advancing two squares.\n"
     pawn "Pawns may not use the initial two - square advance to jump over an occupied square, or to capture. \n\
         Any piece immediately in front of a pawn, friend or foe, blocks its advance. \n"
     pawn "Unlike other pieces, the pawn does not capture in the same direction that it moves. A pawn captures diagonally forward one square to the left or right."
