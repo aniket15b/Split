@@ -88,8 +88,8 @@ label start:
                 "Magnus Carlsen":
                     $ depth = "MagnusCarlsen"
 
-                "Mikhail Tal":
-                    $ depth = "MikhailTal"
+                "Anatoly Karpov":
+                    $ depth = "AnatolyKarpov"
 
                 "Vishwanathan Anand":
                     $ depth = "VishwanathanAnand"
