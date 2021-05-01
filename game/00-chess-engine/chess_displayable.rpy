@@ -17,6 +17,7 @@ define AUDIO_CHECK = THIS_PATH + AUDIO_PATH + 'check.wav'
 define AUDIO_CHECKMATE = THIS_PATH + AUDIO_PATH + 'checkmate.wav'
 define AUDIO_DRAW = THIS_PATH + AUDIO_PATH + 'draw.wav' # used for resign, stalemate, threefold, fifty-move
 define AUDIO_FLIP_BOARD = THIS_PATH + AUDIO_PATH + 'flip_board.wav'
+define ENGINE_EVAL = THIS_PATH + AUDIO_PATH + 'engine.wav'
 
 # this chess game is full-screen when the game resolution is 1280x720
 define CHESS_SCREEN_WIDTH = 1280
@@ -143,8 +144,9 @@ screen chess(fen, player_color, movetime, depth, game_mode):
             text 'Current score' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.game_score)) style 'game_status_text' xalign 0.5
 
-            text 'Engine' style 'game_status_text' xalign 0.5
-            text (str(chess_displayable.game_eval_state) + ' ' + str(chess_displayable.game_eval)) style 'game_status_text' xalign 0.5
+            showif chess_displayable.show_game_eval == True:
+                text 'Engine' style 'game_status_text' xalign 0.5
+                text (str(chess_displayable.game_eval_state) + ' ' + str(chess_displayable.game_eval)) style 'game_status_text' xalign 0.5
 
             text 'Time for white' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.white_time_display)) style 'game_status_text' xalign 0.5
@@ -153,8 +155,16 @@ screen chess(fen, player_color, movetime, depth, game_mode):
             text (str(chess_displayable.black_time_display)) style 'game_status_text' xalign 0.5
 
     # left bottom
-    fixed xpos 20 ypos 500:
+    fixed xpos 20 ypos 480:
         vbox:
+            hbox spacing 5:
+                text 'Show evaluation' color COLOR_WHITE yalign 0.5
+                textbutton '☆':
+                    action [Play('sound', ENGINE_EVAL),
+                    ToggleField(chess_displayable, 'show_game_eval')]
+                    # SetField(chess_displayable, 'show_game_eval', True)]
+                    style 'control_button' yalign 0.5
+
             hbox spacing 5:
                 text 'Resign' color COLOR_WHITE yalign 0.5
                 textbutton '⚐':
