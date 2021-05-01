@@ -49,7 +49,7 @@ define TEXT_STATUS_COORD = (-260, 80)
 define PIECE_TYPES = ('p', 'r', 'b', 'n', 'k', 'q')
 
 # number of history moves to display
-define NUM_HISTORY = 5
+define NUM_HISTORY = 3
 
 # stockfish params
 define MIN_MOVETIME = 100 # min thinking time in milliseconds
@@ -131,16 +131,22 @@ screen chess(fen, player_color, movetime, depth, game_mode):
                 text 'In Check' style 'game_status_text'
             # no need to display DRAW or RESIGN as they immediately return
 
-            null height 50
+            null height 20
 
             text 'Most recent moves' style 'game_status_text' xalign 0.5
             for move in chess_displayable.history:
                 text (move) style 'game_status_text' xalign 0.5
 
-            null height 50
+            null height 20
 
             text 'Current score' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.game_score)) style 'game_status_text' xalign 0.5
+
+            text 'Time for white' style 'game_status_text' xalign 0.5
+            text (str(chess_displayable.white_time_display)) style 'game_status_text' xalign 0.5
+
+            text 'Time for black' style 'game_status_text' xalign 0.5
+            text (str(chess_displayable.black_time_display)) style 'game_status_text' xalign 0.5
 
     # left bottom
     fixed xpos 20 ypos 500:
@@ -176,9 +182,9 @@ screen chess(fen, player_color, movetime, depth, game_mode):
         add hover_displayable # hover loc over chesspieces
         if chess_displayable.game_status == CHECKMATE:
             # use a timer so the player can see the screen once again
-            timer 4.0 action [Function(chess_displayable.kill_chess_subprocess), Return(chess_displayable.winner)]
+            timer 2.0 action [Function(chess_displayable.kill_chess_subprocess), Return(chess_displayable.winner)]
         elif chess_displayable.game_status == STALEMATE:
-            timer 4.0 action [Function(chess_displayable.kill_chess_subprocess), Return(DRAW)]
+            timer 2.0 action [Function(chess_displayable.kill_chess_subprocess), Return(DRAW)]
 
     # right panel for promotion selection
     showif chess_displayable.show_promotion_ui:
@@ -206,6 +212,7 @@ init python:
     import pygame
     import time
     from collections import deque # track move history
+    from threading import Timer
 
     # stockfish engine is OS-dependent
     if renpy.android:
@@ -223,6 +230,32 @@ init python:
     stockfish_dir = os.path.join('game', THIS_PATH, BIN_PATH)
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish-11-64')) # mac
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish_20011801_x64')) # linux
+
+    class RepeatedTimer(object):
+        def __init__(self, interval, function, *args, **kwargs):
+            self._timer     = None
+            self.interval   = interval
+            self.function   = function
+            self.args       = args
+            self.kwargs     = kwargs
+            self.is_running = False
+            self.start()
+
+        def _run(self):
+            self.is_running = False
+            self.start()
+            self.function(*self.args, **self.kwargs)
+
+        def start(self):
+            if not self.is_running:
+                self._timer = Timer(self.interval, self._run)
+                self._timer.start()
+                self.is_running = True
+
+        def stop(self):
+            self._timer.cancel()
+            self.is_running = False
+            print("DONEEE")
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -285,6 +318,16 @@ init python:
 
             self.game_mode = game_mode
 
+            self.white_time = 6000
+
+            self.black_time = self.white_time
+
+            self.white_time_display = time.strftime("%M:%S", time.gmtime(self.white_time))
+
+            self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
+
+            self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
+
             if self.game_mode == "PVP": # player vs player
                 self.bottom_color = WHITE # white on the bottom of screen by default
                 self.uses_stockfish = False
@@ -342,6 +385,19 @@ init python:
             # return to _return in script, could be chess.WHITE, chess.BLACK, or, None
             self.winner = None # None for stalemate
 
+        def update_time(self):
+            if(self.whose_turn == WHITE):
+                self.white_time -= 1
+                self.white_time_display = time.strftime("%M:%S", time.gmtime(self.white_time))
+            else:
+                self.black_time -= 1
+                self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
+
+            if((self.white_time == 0  or self.black_time == 0) and self.rt.is_running):
+                self.check_game_status(override=True)
+            else:
+                renpy.restart_interaction()
+
         def render(self, width, height, st, at):
             render = renpy.Render(width, height)
 
@@ -377,6 +433,7 @@ init python:
         def event(self, ev, x, y, st):
             # ignore clicks if the game has ended
             if self.game_status in [CHECKMATE, STALEMATE, DRAW]:
+                self.rt.stop()
                 return
 
             # skip GUI interaction for AI's turn in Player vs. AI mode
@@ -522,11 +579,21 @@ init python:
                 else:
                     renpy.sound.play(AUDIO_MOVE)
 
-        def check_game_status(self):
+        def check_game_status(self, override=False):
             """
             Check if is checkmate, in check, or stalemate
             and update status text display accordingly
             """
+            if(override):
+                renpy.sound.play(AUDIO_CHECKMATE)
+                # after a move, if it's white's turn, that means black has
+                # just moved and put white into checkmate, thus winner is black
+                # hence need to negate self.whose_turn to get winner
+                renpy.notify('Huzzah! The winner is %s' % ('black' if self.whose_turn else 'white'))
+                self.winner = not self.whose_turn
+                self.game_status = CHECKMATE
+                return
+
             self.chess_subprocess.stdin.write('game_status\n')
             self.game_status = int(self.chess_subprocess.stdout.readline().strip())
             # need is_checkmate and is_stalemate before is_check
