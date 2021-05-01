@@ -6,9 +6,13 @@ import subprocess
 import_dir = sys.argv[1]
 sys.path.append(import_dir)
 
+# THIS_PATH = '00-chess-engine/'
+# import_dir = os.path.join(r'C:\renpy-7.4.4-sdk\renpy-chess/game', THIS_PATH, 'python-packages')
+
 # https://python-chess.readthedocs.io/en/v0.23.10/
 import chess
 import chess.uci
+from chess.uci import Score
 
 def main():
     
@@ -16,8 +20,18 @@ def main():
 
     while True:
         line = raw_input()
+        # line = input()
         # some split token corresponding to that in chess_displayable.rpy
         args = line.split('#')
+
+        # temp = args[0]
+        # args = ['fen', 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', '\n']
+        # chess_engine.init_board(args)
+        # args = ['stockfish', u'C:\\renpy-7.4.4-sdk\\renpy-chess\\game\\00-chess-engine\\bin\\Stockfish\\stockfish_20011801_x64.exe', u'True', u'1000', u'2', u'\n']
+        # chess_engine.init_stockfish(args)
+
+        # args = [temp]
+
         if not args:
             continue   
         if args[0] == 'quit':
@@ -39,6 +53,8 @@ def main():
             chess_engine.get_game_status()
         elif args[0] == 'game_score':
             chess_engine.get_game_score()
+        elif args[0] == 'game_eval':
+            chess_engine.get_game_eval()
         elif args[0] == 'piece_at':
             chess_engine.get_piece_at(args)
         elif args[0] == 'is_capture':
@@ -88,6 +104,10 @@ class ChessEngine():
 
         self.stockfish = chess.uci.popen_engine(stockfish_path, startupinfo=startupinfo)
         self.stockfish.uci()
+
+        self.info_handler = chess.uci.InfoHandler()
+        self.stockfish.info_handlers.append(self.info_handler)
+
         self.stockfish.position(self.board)
     
     def init_maiachess(self, args):
@@ -139,12 +159,21 @@ class ChessEngine():
     def get_game_score(self):
         v = dict(zip('pbnrqPBNRQ',[1,3,3,5,9]*2))
         print(sum(v.get(c,0)*(-1)**(c>'Z')for c in self.board.board_fen()))
-        
+    
+    def get_game_eval(self):
+        with self.info_handler:
+            s = self.info_handler.info["score"].get(1, Score(cp=0, mate=None))
+            if (s.cp == None):
+                print("Mate in")
+                print(s.mate)
+            else:
+                print("Evaluation")
+                print(s.cp)
+       
     def get_stockfish_move(self):
         self.stockfish.position(self.board)
         move = self.stockfish.go(movetime=self.stockfish_movetime, depth=self.stockfish_depth)
         move = move.bestmove
-        print("---***---***---")
         print(move.uci())
 
     def get_maiachess_move(self):

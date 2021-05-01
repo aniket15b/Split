@@ -58,7 +58,8 @@ define MIN_DEPTH = 1
 define MAX_DEPTH = 20
 
 # constants from the python-chess library
-define STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+# define STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+define STARTING_FEN = '4k3/8/8/8/3R4/8/8/4K3 w - - 0 1'
 
 # BEGIN ENUM
 # color
@@ -118,10 +119,10 @@ screen chess(fen, player_color, movetime, depth, game_mode):
     # left top panel for diplaying whoseturn text
     fixed xpos 20 ypos 80 spacing 40:
         vbox:
-            showif chess_displayable.whose_turn == WHITE:
-                text 'Whose turn: White' style 'game_status_text'
-            else:
-                text 'Whose turn: Black' style 'game_status_text'
+            # showif chess_displayable.whose_turn == WHITE:
+            #     text 'Whose turn: White' style 'game_status_text'
+            # else:
+            #     text 'Whose turn: Black' style 'game_status_text'
             
             showif chess_displayable.game_status == CHECKMATE:
                 text 'Checkmate' style 'game_status_text'
@@ -131,16 +132,19 @@ screen chess(fen, player_color, movetime, depth, game_mode):
                 text 'In Check' style 'game_status_text'
             # no need to display DRAW or RESIGN as they immediately return
 
-            null height 20
+            null height 10
 
             text 'Most recent moves' style 'game_status_text' xalign 0.5
             for move in chess_displayable.history:
                 text (move) style 'game_status_text' xalign 0.5
 
-            null height 20
+            null height 10
 
             text 'Current score' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.game_score)) style 'game_status_text' xalign 0.5
+
+            text 'Engine' style 'game_status_text' xalign 0.5
+            text (str(chess_displayable.game_eval_state) + ' ' + str(chess_displayable.game_eval)) style 'game_status_text' xalign 0.5
 
             text 'Time for white' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.white_time_display)) style 'game_status_text' xalign 0.5
@@ -212,7 +216,7 @@ init python:
     import pygame
     import time
     from collections import deque # track move history
-    from threading import Timer
+    from threading import Timer as tmr
 
     # stockfish engine is OS-dependent
     if renpy.android:
@@ -248,14 +252,13 @@ init python:
 
         def start(self):
             if not self.is_running:
-                self._timer = Timer(self.interval, self._run)
+                self._timer = tmr(self.interval, self._run)
                 self._timer.start()
                 self.is_running = True
 
         def stop(self):
             self._timer.cancel()
             self.is_running = False
-            print("DONEEE")
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -382,6 +385,10 @@ init python:
 
             self.game_status = None
             self.game_score = 0
+
+            self.show_game_eval = False
+            self.game_eval_state = 'Evaluation'
+            self.game_eval = '0'
             # return to _return in script, could be chess.WHITE, chess.BLACK, or, None
             self.winner = None # None for stalemate
 
@@ -440,7 +447,8 @@ init python:
             if self.uses_stockfish and self.whose_turn != self.player_color:
                 self.chess_subprocess.stdin.write('stockfish_move\n')
                 move = self.chess_subprocess.stdout.readline().strip()
-                time.sleep(2)
+                print("stockfish move", move)
+                time.sleep(1)
                 self.make_move(move)
                 return
 
@@ -450,7 +458,7 @@ init python:
                 while move != "---***---***---":
                     move = self.chess_subprocess.stdout.readline().strip()
                 move = self.chess_subprocess.stdout.readline().strip()
-                time.sleep(2)
+                time.sleep(1)
                 self.make_move(move)
                 return
 
@@ -574,6 +582,7 @@ init python:
                 # check subprocess to see if the move is a capture
                 self.chess_subprocess.stdin.write('#'.join(['is_capture', move, '\n']))
                 is_capture = eval(self.chess_subprocess.stdout.readline().strip())
+                print('is_capture', is_capture)
                 if is_capture:
                     renpy.sound.play(AUDIO_CAPTURE)
                 else:
@@ -596,6 +605,7 @@ init python:
 
             self.chess_subprocess.stdin.write('game_status\n')
             self.game_status = int(self.chess_subprocess.stdout.readline().strip())
+            print("Game Status", self.game_status)
             # need is_checkmate and is_stalemate before is_check
             if self.game_status == CHECKMATE:
                 renpy.sound.play(AUDIO_CHECKMATE)
@@ -630,6 +640,19 @@ init python:
             """
             self.chess_subprocess.stdin.write('game_score\n')
             self.game_score = int(self.chess_subprocess.stdout.readline().strip())
+            print("Game Score", self.game_score)
+
+        def get_engine_eval(self):
+            """
+            Get engine evaluation of the position
+            """
+            self.chess_subprocess.stdin.write('game_eval\n')
+            self.game_eval_state = self.chess_subprocess.stdout.readline().strip()
+            if (self.game_eval_state == "Mate in"):
+                self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())
+            else:
+                self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())/100.0
+            print("Eval ", self.game_eval)
 
         def show_claim_draw_ui(self, reason=''):
             """
@@ -674,6 +697,7 @@ init python:
             self.history.append(move)
             self.src_coord = None
             self.legal_dsts = []
+            self.get_engine_eval()
             renpy.redraw(self, 0)
 
             self.check_game_status()
@@ -728,6 +752,7 @@ init python:
             """
             self.chess_subprocess.stdin.write('legal_moves\n')
             legal_moves = self.chess_subprocess.stdout.readline().strip().split('#')
+            print('legal_moves', legal_moves)
             return legal_moves
 
         def push_move(self, move):
@@ -735,6 +760,7 @@ init python:
             self.chess_subprocess.stdin.write('#'.join(['push_move', move, '\n']))
             # update whose_turn upon a valid move
             self.whose_turn = eval(self.chess_subprocess.stdout.readline().strip())
+            print('Push move', self.whose_turn)
 
         def pop_move(self):
             """
@@ -743,6 +769,7 @@ init python:
             self.chess_subprocess.stdin.write('pop_move\n')
             # update whose_turn upon undoing
             self.whose_turn = eval(self.chess_subprocess.stdout.readline().strip())
+            print('Pop move', self.whose_turn)
 
         def kill_chess_subprocess(self):
             self.chess_subprocess.stdin.write('quit\n')
