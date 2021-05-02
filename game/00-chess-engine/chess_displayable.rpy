@@ -175,11 +175,28 @@ screen chess(fen, player_color, movetime, depth, game_mode):
                         Return(not chess_displayable.whose_turn)])]
                     style 'control_button' yalign 0.5
 
-            hbox spacing 5:
-                text 'Undo move' color COLOR_WHITE yalign 0.5
-                textbutton '⟲':
-                    action [Function(chess_displayable.undo_move)]
-                    style 'control_button' yalign 0.5
+
+            showif chess_displayable.analysing == False:
+                hbox spacing 5:
+                    text 'Undo move' color COLOR_WHITE yalign 0.5
+                    textbutton '⟲':
+                        action [Function(chess_displayable.undo_move)]
+                        style 'control_button' yalign 0.5
+
+                hbox spacing 5:
+                    text 'Analysis' color COLOR_WHITE yalign 0.5
+                    textbutton '↢':
+                        action [Function(chess_displayable.back_move)]
+                        style 'control_button' yalign 0.5
+            else:
+                hbox spacing 5:
+                    text 'Analysis' color COLOR_WHITE yalign 0.4
+                    textbutton '↢':
+                        action [Function(chess_displayable.back_move)]
+                        style 'control_button' yalign 0.3
+                    textbutton '↣':
+                        action [Function(chess_displayable.front_move)]
+                        style 'control_button' yalign 0.3
 
             hbox spacing 5:
                 text 'Flip board view' color COLOR_WHITE yalign 0.5
@@ -245,30 +262,30 @@ init python:
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish-11-64')) # mac
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish_20011801_x64')) # linux
 
-    class RepeatedTimer(object):
-        def __init__(self, interval, function, *args, **kwargs):
-            self._timer     = None
-            self.interval   = interval
-            self.function   = function
-            self.args       = args
-            self.kwargs     = kwargs
-            self.is_running = False
-            self.start()
+    # class RepeatedTimer(object):
+    #     def __init__(self, interval, function, *args, **kwargs):
+    #         self._timer     = None
+    #         self.interval   = interval
+    #         self.function   = function
+    #         self.args       = args
+    #         self.kwargs     = kwargs
+    #         self.is_running = False
+    #         self.start()
 
-        def _run(self):
-            self.is_running = False
-            self.start()
-            self.function(*self.args, **self.kwargs)
+    #     def _run(self):
+    #         self.is_running = False
+    #         self.start()
+    #         self.function(*self.args, **self.kwargs)
 
-        def start(self):
-            if not self.is_running:
-                self._timer = tmr(self.interval, self._run)
-                self._timer.start()
-                self.is_running = True
+    #     def start(self):
+    #         if not self.is_running:
+    #             self._timer = tmr(self.interval, self._run)
+    #             self._timer.start()
+    #             self.is_running = True
 
-        def stop(self):
-            self._timer.cancel()
-            self.is_running = False
+    #     def stop(self):
+    #         self._timer.cancel()
+    #         self.is_running = False
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -327,6 +344,9 @@ init python:
 
             self.history = deque([], NUM_HISTORY)
 
+            self.full_game_history = []
+            self.sideline = []
+
             self.player_color = player_color
 
             self.game_mode = game_mode
@@ -339,7 +359,7 @@ init python:
 
             self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
 
-            self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
+            # self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
 
             if self.game_mode == "PVP": # player vs player
                 self.bottom_color = WHITE # white on the bottom of screen by default
@@ -399,6 +419,10 @@ init python:
             self.show_game_eval = False
             self.game_eval_state = 'Evaluation'
             self.game_eval = '0'
+
+            self.analysing = False
+            self.analysis_index = -1
+            self.sideline_index = -1
             # return to _return in script, could be chess.WHITE, chess.BLACK, or, None
             self.winner = None # None for stalemate
 
@@ -450,25 +474,25 @@ init python:
         def event(self, ev, x, y, st):
             # ignore clicks if the game has ended
             if self.game_status in [CHECKMATE, STALEMATE, DRAW]:
-                self.rt.stop()
+                # self.rt.stop()
                 return
 
             # skip GUI interaction for AI's turn in Player vs. AI mode
-            if self.uses_stockfish and self.whose_turn != self.player_color:
+            if self.uses_stockfish and self.whose_turn != self.player_color and not self.analysing:
                 self.chess_subprocess.stdin.write('stockfish_move\n')
                 move = self.chess_subprocess.stdout.readline().strip()
-                print("stockfish move", move)
-                time.sleep(1)
+                # print("stockfish move", move)
+                # time.sleep(1)
                 self.make_move(move)
                 return
 
-            if self.uses_maiachess and self.whose_turn != self.player_color:
+            if self.uses_maiachess and self.whose_turn != self.player_color and not self.analysing:
                 self.chess_subprocess.stdin.write('maiachess_move\n')
                 move = self.chess_subprocess.stdout.readline().strip()
                 while move != "---***---***---":
                     move = self.chess_subprocess.stdout.readline().strip()
                 move = self.chess_subprocess.stdout.readline().strip()
-                time.sleep(1)
+                # time.sleep(1)
                 self.make_move(move)
                 return
 
@@ -592,7 +616,7 @@ init python:
                 # check subprocess to see if the move is a capture
                 self.chess_subprocess.stdin.write('#'.join(['is_capture', move, '\n']))
                 is_capture = eval(self.chess_subprocess.stdout.readline().strip())
-                print('is_capture', is_capture)
+                # print('is_capture', is_capture)
                 if is_capture:
                     renpy.sound.play(AUDIO_CAPTURE)
                 else:
@@ -615,7 +639,7 @@ init python:
 
             self.chess_subprocess.stdin.write('game_status\n')
             self.game_status = int(self.chess_subprocess.stdout.readline().strip())
-            print("Game Status", self.game_status)
+            # print("Game Status", self.game_status)
             # need is_checkmate and is_stalemate before is_check
             if self.game_status == CHECKMATE:
                 renpy.sound.play(AUDIO_CHECKMATE)
@@ -650,7 +674,7 @@ init python:
             """
             self.chess_subprocess.stdin.write('game_score\n')
             self.game_score = int(self.chess_subprocess.stdout.readline().strip())
-            print("Game Score", self.game_score)
+            # print("Game Score", self.game_score)
 
         def get_engine_eval(self):
             """
@@ -662,7 +686,7 @@ init python:
                 self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())
             else:
                 self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())/100.0
-            print("Eval ", self.game_eval)
+            # print("Eval ", self.game_eval)
 
         def show_claim_draw_ui(self, reason=''):
             """
@@ -692,6 +716,12 @@ init python:
                 if move_src_file == src_file and move_src_rank == src_rank:
                     self.legal_dsts.append((move_dst_file, move_dst_rank))
 
+        def redraw(self):
+            self.src_coord = None
+            self.legal_dsts = []
+            self.highlighted_squares = []
+            renpy.redraw(self, 0)
+
         def make_move(self, move):
             """
             1. play the corresponding move audio
@@ -704,14 +734,23 @@ init python:
             self.push_move(move)
             self.add_highlight_move(move)
             # for redrawing
-            self.history.append(move)
-            self.src_coord = None
-            self.legal_dsts = []
-            self.get_engine_eval()
-            renpy.redraw(self, 0)
+            self.redraw()
+
+            if(self.analysis_index == len(self.full_game_history) - 1):
+                self.analysing = False
+
+            #for analysis
+            if(self.analysing):
+                self.sideline_index += 1
+                self.sideline.append(move)
+            else:
+                self.analysis_index += 1
+                self.history.append(move)
+                self.full_game_history.append(move)
 
             self.check_game_status()
             self.check_game_score()
+            self.get_engine_eval()
             self.show_promotion_ui = False
             self.promotion = None
 
@@ -722,7 +761,7 @@ init python:
             2. communicate the undoing to the subprocess
             3. remove the move from the history      
             """
-            if not self.history or ((self.uses_stockfish or self.uses_maiachess) and len(self.history) < 2):
+            if not self.history or ((self.uses_stockfish or self.uses_maiachess) and len(self.history) < 2 and (not self.analysing)):
                 return
             renpy.sound.play(AUDIO_MOVE)
             if (self.uses_stockfish or self.uses_maiachess): # PvC, undo two moves
@@ -730,18 +769,46 @@ init python:
                 self.pop_move()
                 self.history.pop()
                 self.history.pop()
+                self.analysis_index -= 2
             else: # PvP, undo one move
                 self.pop_move()
                 self.history.pop()
+                self.analysis_index -= 1
             # for redrawing
-            self.src_coord = None
-            self.legal_dsts = []
-            self.highlighted_squares = []
-            renpy.redraw(self, 0)
+            self.redraw()
 
             self.check_game_status()
             self.show_promotion_ui = False
             self.promotion = None
+
+        def front_move(self):
+            # print("front move")
+            if(self.analysing):
+                if(self.sideline_index == -1):
+                    if(self.analysis_index < len(self.full_game_history) - 1):
+                        self.analysis_index += 1
+                        self.push_move(self.full_game_history[self.analysis_index])
+                else:
+                    if(self.sideline_index < len(self.sideline) - 1):
+                        self.sideline_index += 1
+                        self.push_move(self.sideline[self.sideline_index])
+            self.redraw()
+
+        def back_move(self):
+            self.analysing = True
+            if(self.sideline_index == -1):
+                if(self.analysis_index > -1):
+                    self.pop_move()
+                    self.analysis_index -= 1
+                else:
+                    return
+            else:
+                if(self.sideline_index > -1):
+                    self.pop_move()
+                    self.sideline_index -= 1
+                else:
+                    return
+            self.redraw()
 
         # END
 
@@ -762,7 +829,7 @@ init python:
             """
             self.chess_subprocess.stdin.write('legal_moves\n')
             legal_moves = self.chess_subprocess.stdout.readline().strip().split('#')
-            print('legal_moves', legal_moves)
+            # print('legal_moves', legal_moves)
             return legal_moves
 
         def push_move(self, move):
@@ -770,7 +837,7 @@ init python:
             self.chess_subprocess.stdin.write('#'.join(['push_move', move, '\n']))
             # update whose_turn upon a valid move
             self.whose_turn = eval(self.chess_subprocess.stdout.readline().strip())
-            print('Push move', self.whose_turn)
+            # print('Push move', self.whose_turn)
 
         def pop_move(self):
             """
@@ -779,7 +846,7 @@ init python:
             self.chess_subprocess.stdin.write('pop_move\n')
             # update whose_turn upon undoing
             self.whose_turn = eval(self.chess_subprocess.stdout.readline().strip())
-            print('Pop move', self.whose_turn)
+            # print('Pop move', self.whose_turn)
 
         def kill_chess_subprocess(self):
             self.chess_subprocess.stdin.write('quit\n')
