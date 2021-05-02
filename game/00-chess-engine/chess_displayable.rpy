@@ -278,8 +278,8 @@ init python:
             self.start()
 
         def _run(self):
-            self.is_running = False
-            self.start()
+            # self.is_running = False
+            # self.start()
             self.function(*self.args, **self.kwargs)
 
         def start(self):
