@@ -107,7 +107,7 @@ style control_button_text is text:
 
 # BEGIN SCREEN
 
-screen chess(fen, player_color, movetime, depth, game_mode):
+screen chess(fen, player_color, movetime, depth, game_mode, time_set):
     
     modal True
 
@@ -135,11 +135,11 @@ screen chess(fen, player_color, movetime, depth, game_mode):
 
             null height 10
 
-            text 'Most recent moves' style 'game_status_text' xalign 0.5
-            for move in chess_displayable.history:
-                text (move) style 'game_status_text' xalign 0.5
+            # text 'Most recent moves' style 'game_status_text' xalign 0.5
+            # for move in chess_displayable.history:
+            #     text (move) style 'game_status_text' xalign 0.5
 
-            null height 10
+            # null height 10
 
             text 'Current score' style 'game_status_text' xalign 0.5
             text (str(chess_displayable.game_score)) style 'game_status_text' xalign 0.5
@@ -148,14 +148,15 @@ screen chess(fen, player_color, movetime, depth, game_mode):
                 text 'Engine' style 'game_status_text' xalign 0.5
                 text (str(chess_displayable.game_eval_state) + ' ' + str(chess_displayable.game_eval)) style 'game_status_text' xalign 0.5
 
-            text 'Time for white' style 'game_status_text' xalign 0.5
-            text (str(chess_displayable.white_time_display)) style 'game_status_text' xalign 0.5
+            showif time_set != -1:
+                text 'Time for white' style 'game_status_text' xalign 0.5
+                text (str(chess_displayable.white_time_display)) style 'game_status_text' xalign 0.5
 
-            text 'Time for black' style 'game_status_text' xalign 0.5
-            text (str(chess_displayable.black_time_display)) style 'game_status_text' xalign 0.5
+                text 'Time for black' style 'game_status_text' xalign 0.5
+                text (str(chess_displayable.black_time_display)) style 'game_status_text' xalign 0.5
 
     # left bottom
-    fixed xpos 20 ypos 480:
+    fixed xpos 20 ypos 400:
         vbox:
             hbox spacing 5:
                 text 'Show evaluation' color COLOR_WHITE yalign 0.5
@@ -189,6 +190,10 @@ screen chess(fen, player_color, movetime, depth, game_mode):
                         action [Function(chess_displayable.back_move)]
                         style 'control_button' yalign 0.5
             else:
+                hbox spacing 5:
+                    text 'U̶n̶d̶o̶ ̶m̶o̶v̶e̶' color COLOR_WHITE yalign 0.5
+                    textbutton '⟲':
+                        style 'control_button' yalign 0.5
                 hbox spacing 5:
                     text 'Analysis' color COLOR_WHITE yalign 0.4
                     textbutton '↢':
@@ -262,30 +267,30 @@ init python:
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish-11-64')) # mac
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish_20011801_x64')) # linux
 
-    # class RepeatedTimer(object):
-    #     def __init__(self, interval, function, *args, **kwargs):
-    #         self._timer     = None
-    #         self.interval   = interval
-    #         self.function   = function
-    #         self.args       = args
-    #         self.kwargs     = kwargs
-    #         self.is_running = False
-    #         self.start()
+    class RepeatedTimer(object):
+        def __init__(self, interval, function, *args, **kwargs):
+            self._timer     = None
+            self.interval   = interval
+            self.function   = function
+            self.args       = args
+            self.kwargs     = kwargs
+            self.is_running = False
+            self.start()
 
-    #     def _run(self):
-    #         self.is_running = False
-    #         self.start()
-    #         self.function(*self.args, **self.kwargs)
+        def _run(self):
+            self.is_running = False
+            self.start()
+            self.function(*self.args, **self.kwargs)
 
-    #     def start(self):
-    #         if not self.is_running:
-    #             self._timer = tmr(self.interval, self._run)
-    #             self._timer.start()
-    #             self.is_running = True
+        def start(self):
+            if not self.is_running:
+                self._timer = tmr(self.interval, self._run)
+                self._timer.start()
+                self.is_running = True
 
-    #     def stop(self):
-    #         self._timer.cancel()
-    #         self.is_running = False
+        def stop(self):
+            self._timer.cancel()
+            self.is_running = False
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -351,15 +356,22 @@ init python:
 
             self.game_mode = game_mode
 
-            self.white_time = 6000
+            if(time_set != -1):
+            
+                self.white_time = time_set * 60
 
-            self.black_time = self.white_time
+                self.black_time = self.white_time
 
-            self.white_time_display = time.strftime("%M:%S", time.gmtime(self.white_time))
+                self.white_time_display = time.strftime("%M:%S", time.gmtime(self.white_time))
 
-            self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
+                self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
 
-            # self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
+                self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
+
+            else:
+                self.white_time_display = 0
+
+                self.black_time_display = 0
 
             if self.game_mode == "PVP": # player vs player
                 self.bottom_color = WHITE # white on the bottom of screen by default
@@ -474,7 +486,8 @@ init python:
         def event(self, ev, x, y, st):
             # ignore clicks if the game has ended
             if self.game_status in [CHECKMATE, STALEMATE, DRAW]:
-                # self.rt.stop()
+                if(self.rt):
+                    self.rt.stop()
                 return
 
             # skip GUI interaction for AI's turn in Player vs. AI mode

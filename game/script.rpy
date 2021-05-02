@@ -26,9 +26,33 @@ label start:
             $ depth = None
             $ game_mode = "PVP"
 
+            menu:
+                "Please select a time format"
+
+                "5 minute":
+                    $ time_set = 5
+
+                "15 minute":
+                    $ time_set = 15
+
+                "Unlimited Time":
+                    $ time_set = -1
+
         "Player vs. Computer":
             $ movetime = 1000
             $ game_mode = "Computer"
+
+            menu:
+                "Please select a time format"
+
+                "5 minute":
+                    $ time_set = 5
+
+                "15 minute":
+                    $ time_set = 15
+
+                "Unlimited Time":
+                    $ time_set = -1
 
             menu:
                 "Please select a difficulty level"
@@ -57,6 +81,18 @@ label start:
             $ game_mode = "Personality"
 
             menu:
+                "Please select a time format"
+
+                "5 minute":
+                    $ time_set = 5
+
+                "15 minute":
+                    $ time_set = 15
+
+                "Unlimited Time":
+                    $ time_set = -1
+
+            menu:
                 "Please select a personality type"
 
                 "Aggressive":
@@ -81,6 +117,18 @@ label start:
         "Player vs. Famous People":
             $ movetime = 1000
             $ game_mode = "FamousPeople"
+
+            menu:
+                "Please select a time format"
+
+                "5 minute":
+                    $ time_set = 5
+
+                "15 minute":
+                    $ time_set = 15
+
+                "Unlimited Time":
+                    $ time_set = -1
 
             menu:
                 "Please select a famous person"
@@ -113,7 +161,7 @@ label start:
     # avoid rolling back and losing chess game state
     $ renpy.block_rollback()
 
-    call screen chess(fen, player_color, movetime, depth, game_mode)
+    call screen chess(fen, player_color, movetime, depth, game_mode, time_set)
 
     # avoid rolling back and entering the chess game again
     $ renpy.block_rollback()
