@@ -370,7 +370,7 @@ init python:
 
             else:
                 self.white_time_display = 0
-
+                self.rt = None
                 self.black_time_display = 0
 
             if self.game_mode == "PVP": # player vs player
