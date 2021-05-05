@@ -248,7 +248,7 @@ init python:
     import pygame
     import time
     from collections import deque # track move history
-    from threading import Timer as tmr
+    import threading
 
     # stockfish engine is OS-dependent
     if renpy.android:
@@ -267,30 +267,21 @@ init python:
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish-11-64')) # mac
     build.executable(os.path.join(stockfish_dir, 'Stockfish/stockfish_20011801_x64')) # linux
 
-    class RepeatedTimer(object):
-        def __init__(self, interval, function, *args, **kwargs):
-            self._timer     = None
-            self.interval   = interval
-            self.function   = function
-            self.args       = args
-            self.kwargs     = kwargs
-            self.is_running = False
-            self.start()
+    def setInterval(interval):
+        def decorator(function):
+            def wrapper(*args, **kwargs):
+                stopped = threading.Event()
 
-        def _run(self):
-            # self.is_running = False
-            # self.start()
-            self.function(*self.args, **self.kwargs)
+                def loop(): # executed in another thread
+                    while not stopped.wait(interval): # until stopped
+                        function(*args, **kwargs)
 
-        def start(self):
-            if not self.is_running:
-                self._timer = tmr(self.interval, self._run)
-                self._timer.start()
-                self.is_running = True
-
-        def stop(self):
-            self._timer.cancel()
-            self.is_running = False
+                t = threading.Thread(target=loop)
+                t.daemon = True # stop if the program exits
+                t.start()
+                return stopped
+            return wrapper
+        return decorator
 
     class HoverDisplayable(renpy.Displayable):
         """
@@ -366,7 +357,7 @@ init python:
 
                 self.black_time_display = time.strftime("%M:%S", time.gmtime(self.black_time))
 
-                self.rt = RepeatedTimer(1, self.update_time) # it auto-starts, no need of rt.start()
+                self.rt = self.update_time()
 
             else:
                 self.white_time_display = 0
@@ -438,6 +429,7 @@ init python:
             # return to _return in script, could be chess.WHITE, chess.BLACK, or, None
             self.winner = None # None for stalemate
 
+        @setInterval(1)
         def update_time(self):
             if(self.whose_turn == WHITE):
                 self.white_time -= 1
@@ -487,7 +479,7 @@ init python:
             # ignore clicks if the game has ended
             if self.game_status in [CHECKMATE, STALEMATE, DRAW]:
                 if(self.rt):
-                    self.rt.stop()
+                    self.rt.set()
                 return
 
             # skip GUI interaction for AI's turn in Player vs. AI mode
