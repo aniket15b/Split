@@ -59,8 +59,8 @@ define MIN_DEPTH = 1
 define MAX_DEPTH = 20
 
 # constants from the python-chess library
-# define STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-define STARTING_FEN = '4k3/8/8/8/3R4/8/8/4K3 w - - 0 1'
+define STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+# define STARTING_FEN = '4k3/8/8/8/3R4/8/8/4K3 w - - 0 1'
 
 # BEGIN ENUM
 # color
@@ -158,13 +158,14 @@ screen chess(fen, player_color, movetime, depth, game_mode, time_set):
     # left bottom
     fixed xpos 20 ypos 400:
         vbox:
-            hbox spacing 5:
-                text 'Show evaluation' color COLOR_WHITE yalign 0.5
-                textbutton '☆':
-                    action [Play('sound', ENGINE_EVAL),
-                    ToggleField(chess_displayable, 'show_game_eval')]
-                    # SetField(chess_displayable, 'show_game_eval', True)]
-                    style 'control_button' yalign 0.5
+            showif chess_displayable.uses_stockfish == True or chess_displayable.uses_maiachess == True:
+                hbox spacing 5:
+                    text 'Show evaluation' color COLOR_WHITE yalign 0.5
+                    textbutton '☆':
+                        action [Play('sound', ENGINE_EVAL),
+                        ToggleField(chess_displayable, 'show_game_eval')]
+                        # SetField(chess_displayable, 'show_game_eval', True)]
+                        style 'control_button' yalign 0.5
 
             hbox spacing 5:
                 text 'Resign' color COLOR_WHITE yalign 0.5
@@ -184,11 +185,12 @@ screen chess(fen, player_color, movetime, depth, game_mode, time_set):
                         action [Function(chess_displayable.undo_move)]
                         style 'control_button' yalign 0.5
 
-                hbox spacing 5:
-                    text 'Analysis' color COLOR_WHITE yalign 0.5
-                    textbutton '↢':
-                        action [Function(chess_displayable.back_move)]
-                        style 'control_button' yalign 0.5
+                showif chess_displayable.uses_stockfish == True or chess_displayable.uses_maiachess == True:
+                    hbox spacing 5:
+                        text 'Analysis' color COLOR_WHITE yalign 0.5
+                        textbutton '↢':
+                            action [Function(chess_displayable.back_move)]
+                            style 'control_button' yalign 0.5
             else:
                 hbox spacing 5:
                     text 'U̶n̶d̶o̶ ̶m̶o̶v̶e̶' color COLOR_WHITE yalign 0.5
@@ -476,6 +478,9 @@ init python:
             return render
 
         def event(self, ev, x, y, st):
+            if(self.analysis_index == len(self.full_game_history) - 1):
+                self.analysing = False
+
             # ignore clicks if the game has ended
             if self.game_status in [CHECKMATE, STALEMATE, DRAW]:
                 if(self.rt):
@@ -485,6 +490,9 @@ init python:
             # skip GUI interaction for AI's turn in Player vs. AI mode
             if self.uses_stockfish and self.whose_turn != self.player_color and not self.analysing:
                 self.chess_subprocess.stdin.write('stockfish_move\n')
+                move = self.chess_subprocess.stdout.readline().strip()
+                while move != "---***---***---":
+                    move = self.chess_subprocess.stdout.readline().strip()
                 move = self.chess_subprocess.stdout.readline().strip()
                 # print("stockfish move", move)
                 # time.sleep(1)
@@ -620,6 +628,10 @@ init python:
             else:
                 # check subprocess to see if the move is a capture
                 self.chess_subprocess.stdin.write('#'.join(['is_capture', move, '\n']))
+                is_capture = ''
+                while is_capture != "---***---***---":
+                    # print(self.game_eval_state)
+                    is_capture = self.chess_subprocess.stdout.readline().strip()
                 is_capture = eval(self.chess_subprocess.stdout.readline().strip())
                 # print('is_capture', is_capture)
                 if is_capture:
@@ -687,10 +699,19 @@ init python:
             """
             self.chess_subprocess.stdin.write('game_eval\n')
             self.game_eval_state = self.chess_subprocess.stdout.readline().strip()
+            while self.game_eval_state != "---***---***---":
+                # print(self.game_eval_state)
+                self.game_eval_state = self.chess_subprocess.stdout.readline().strip()
+
+            self.game_eval_state = self.chess_subprocess.stdout.readline().strip()
+
             if (self.game_eval_state == "Mate in"):
                 self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())
             else:
-                self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())/100.0
+                if(self.uses_stockfish):
+                    self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())/100.0
+                elif(self.uses_maiachess):
+                    self.game_eval = -1 * int(self.chess_subprocess.stdout.readline().strip())/10.0
             # print("Eval ", self.game_eval)
 
         def show_claim_draw_ui(self, reason=''):
@@ -755,7 +776,8 @@ init python:
 
             self.check_game_status()
             self.check_game_score()
-            self.get_engine_eval()
+            if(self.uses_stockfish or self.uses_maiachess):
+                self.get_engine_eval()
             self.show_promotion_ui = False
             self.promotion = None
 
@@ -797,6 +819,8 @@ init python:
                     if(self.sideline_index < len(self.sideline) - 1):
                         self.sideline_index += 1
                         self.push_move(self.sideline[self.sideline_index])
+            self.get_engine_eval()
+            print(self.game_eval)
             self.redraw()
 
         def back_move(self):
@@ -813,6 +837,8 @@ init python:
                     self.sideline_index -= 1
                 else:
                     return
+            self.get_engine_eval()
+            print(self.game_eval)
             self.redraw()
 
         # END
@@ -823,6 +849,10 @@ init python:
             return the symbol P, N, B, R, Q or K for white pieces or the lower-case variants for the black pieces
             """
             self.chess_subprocess.stdin.write('#'.join(['piece_at', str(file_idx), str(rank_idx), '\n']))
+            piece = ''
+            while piece != "---***---***---":
+                # print(self.game_eval_state)
+                piece = self.chess_subprocess.stdout.readline().strip()
             piece = self.chess_subprocess.stdout.readline().strip()
             while piece not in ['p','r','b','n','k','q','P','R','B','N','K','Q','None']:
                 piece = self.chess_subprocess.stdout.readline().strip()
@@ -833,6 +863,10 @@ init python:
             return a list of legal moves
             """
             self.chess_subprocess.stdin.write('legal_moves\n')
+            legal_moves = ''
+            while legal_moves != "---***---***---":
+                # print(self.game_eval_state)
+                legal_moves = self.chess_subprocess.stdout.readline().strip()
             legal_moves = self.chess_subprocess.stdout.readline().strip().split('#')
             # print('legal_moves', legal_moves)
             return legal_moves

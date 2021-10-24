@@ -4,8 +4,8 @@
 # name of the character.
 
 define e = Character("ChessMaster")
-define pawn = Character("Pawn Star")
-define bishop = Character("Bitchin Bishop")
+define pawn = Character("Pawn with Brawn")
+define bishop = Character("Bitchin' Bishop")
 define knight = Character("Knight to meet you")
 define rook = Character("Bookie Rook")
 define queen = Character("Queen Bee")

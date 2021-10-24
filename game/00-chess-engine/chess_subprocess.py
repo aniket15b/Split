@@ -82,6 +82,7 @@ class ChessEngine():
 
         self.board = None # the chess board object
         self.stockfish = None # chess AI engine
+        self.maiachess = None
         self.stockfish_movetime = None
         self.stockfish_depth = None
 
@@ -90,6 +91,7 @@ class ChessEngine():
         self.board = chess.Board(fen=fen)
 
     def init_stockfish(self, args):
+        self.maiachess = None
         stockfish_path = args[1]
         is_os_windows = eval(args[2])
         self.stockfish_movetime = int(args[3])
@@ -111,6 +113,7 @@ class ChessEngine():
         self.stockfish.position(self.board)
     
     def init_maiachess(self, args):
+        self.stockfish = None
         maiachess_path = args[1]
         is_os_windows = eval(args[2])
         self.maiachess_movetime = int(args[3])
@@ -123,19 +126,26 @@ class ChessEngine():
 
         self.maiachess = chess.uci.popen_engine(maiachess_path, startupinfo=startupinfo)
         self.maiachess.uci()
+
+        self.info_handler = chess.uci.InfoHandler()
+        self.maiachess.info_handlers.append(self.info_handler)
+
         self.maiachess.position(self.board)
 
     def get_piece_at(self, args):
         file_idx, rank_idx = int(args[1]), int(args[2])
         piece = self.board.piece_at(chess.square(file_idx, rank_idx))
         if piece:
+            print("---***---***---")
             print(piece.symbol())
         else:
+            print("---***---***---")
             print('None')
 
     def get_is_capture(self, args):
         move_uci = args[1]
         move = chess.Move.from_uci(move_uci)
+        print("---***---***---")
         print(self.board.is_capture(move))
 
     def get_game_status(self):
@@ -161,19 +171,28 @@ class ChessEngine():
         print(sum(v.get(c,0)*(-1)**(c>'Z')for c in self.board.board_fen()))
     
     def get_game_eval(self):
+        if(self.stockfish == None):
+            self.maiachess.position(self.board)
+            self.maiachess.go(movetime=self.maiachess_movetime, depth=self.maiachess_depth)
+        if(self.maiachess == None):
+            self.stockfish.position(self.board)
+            self.stockfish.go(movetime=self.stockfish_movetime, depth=self.stockfish_depth)
         with self.info_handler:
             s = self.info_handler.info["score"].get(1, Score(cp=0, mate=None))
+            print(s)
+            print("---***---***---")
             if (s.cp == None):
                 print("Mate in")
                 print(s.mate)
             else:
                 print("Evaluation")
                 print(s.cp)
-       
+
     def get_stockfish_move(self):
         self.stockfish.position(self.board)
         move = self.stockfish.go(movetime=self.stockfish_movetime, depth=self.stockfish_depth)
         move = move.bestmove
+        print("---***---***---")
         print(move.uci())
 
     def get_maiachess_move(self):
@@ -184,6 +203,7 @@ class ChessEngine():
         print(move.uci())
 
     def get_legal_moves(self):
+        print("---***---***---")
         print('#'.join([move.uci() for move in self.board.legal_moves]))
 
     def push_move(self, args):
